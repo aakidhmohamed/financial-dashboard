@@ -1,0 +1,49 @@
+{
+  "data": [
+    {
+      "id": "e95be10e-9284-4261-be30-a0448f11429d",
+      "date": "2026-02-13",
+      "type": "revenue",
+      "category_id": "13cd92a5-d85f-4d25-a146-6243d507af04",
+      "amount": 1000,
+      "description": "Invoice INV-TEST-1770999259685 - Revenue recognition",
+      "client_id": "ea7d7d3b-72e7-4fad-b13e-a77671fabacf",
+      "supplier_id": null,
+      "account_id": "f9caef42-e0d9-4fec-8f64-a7f86fa75155",
+      "created_at": "2026-02-13T16:14:23.327187+00:00",
+      "updated_at": "2026-02-13T16:14:23.327187+00:00",
+      "to_account_id": null,
+      "invoice_id": "cb165d66-23c4-4c15-9c8a-884581634e41",
+      "category": {
+        "id": "13cd92a5-d85f-4d25-a146-6243d507af04",
+        "name": "Sales",
+        "type": "revenue",
+        "created_at": "2026-02-13T15:12:53.881551+00:00"
+      },
+      "client": {
+        "id": "ea7d7d3b-72e7-4fad-b13e-a77671fabacf",
+        "name": "Test Client AR",
+        "email": "test_ar@example.com",
+        "notes": null,
+        "phone": null,
+        "address": null,
+        "created_at": "2026-02-13T16:14:20.173767+00:00",
+        "updated_at": "2026-02-13T16:14:20.173767+00:00"
+      },
+      "supplier": null,
+      "account": {
+        "id": "f9caef42-e0d9-4fec-8f64-a7f86fa75155",
+        "name": "Accounts Receivable",
+        "type": "asset",
+        "balance": 3000,
+        "created_at": "2026-02-12T18:04:43.483538+00:00",
+        "updated_at": "2026-02-13T16:14:23.327187+00:00",
+        "description": "Money owed by clients"
+      },
+      "to_account": null
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 50
+}
