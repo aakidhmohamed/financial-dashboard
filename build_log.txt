@@ -1,0 +1,50 @@
+
+> financial-dashboard@0.1.0 build
+> next build
+
+   Γû▓ Next.js 15.5.12
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ Γ£ô Compiled successfully in 9.5s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/17) ...
+   Generating static pages (4/17) 
+   Generating static pages (8/17) 
+   Generating static pages (12/17) 
+ Γ£ô Generating static pages (17/17)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS
+Γöî ╞Æ /                                    9.32 kB         124 kB
+Γö£ Γùï /_not-found                            995 B         103 kB
+Γö£ ╞Æ /api/accounts                          152 B         102 kB
+Γö£ ╞Æ /api/categories                        152 B         102 kB
+Γö£ ╞Æ /api/clients                           152 B         102 kB
+Γö£ ╞Æ /api/clients/[id]                      152 B         102 kB
+Γö£ ╞Æ /api/dashboard                         152 B         102 kB
+Γö£ ╞Æ /api/invoices                          152 B         102 kB
+Γö£ ╞Æ /api/invoices/[id]                     152 B         102 kB
+Γö£ ╞Æ /api/invoices/[id]/convert             152 B         102 kB
+Γö£ ╞Æ /api/invoices/next-number              152 B         102 kB
+Γö£ ╞Æ /api/suppliers                         152 B         102 kB
+Γö£ ╞Æ /api/suppliers/[id]                    152 B         102 kB
+Γö£ ╞Æ /api/transactions                      152 B         102 kB
+Γö£ ╞Æ /clients                             2.88 kB         105 kB
+Γö£ ╞Æ /invoices                            2.74 kB         117 kB
+Γö£ ╞Æ /invoices/[id]                       7.55 kB         113 kB
+Γö£ ╞Æ /invoices/[id]/edit                  3.62 kB         118 kB
+Γö£ Γùï /invoices/create                     3.82 kB         118 kB
+Γö£ Γùï /suppliers                           3.02 kB         105 kB
+Γöö ╞Æ /transactions                        43.1 kB         154 kB
++ First Load JS shared by all             102 kB
+  Γö£ chunks/255-ebd51be49873d76c.js         46 kB
+  Γö£ chunks/4bd1b696-c023c6e3521b1417.js  54.2 kB
+  Γöö other shared chunks (total)          1.99 kB
+
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+

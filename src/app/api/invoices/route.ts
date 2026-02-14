@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { InvoiceInput, InvoiceItemInput } from '@/lib/types'
 
 export async function GET(request: Request) {
     try {
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
         // Insert invoice
         const { data: invoice, error: invoiceError } = await supabase
             .from('invoices')
-            .insert(invoiceData)
+            .insert(invoiceData as InvoiceInput)
             .select('*')
             .single()
 

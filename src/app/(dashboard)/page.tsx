@@ -6,21 +6,8 @@ import type { DashboardSummary } from '@/lib/types'
 import { AlertCircle, ArrowUpRight, Plus, Download, TrendingUp, TrendingDown, Landmark } from 'lucide-react'
 import Link from 'next/link'
 
-async function getDashboardData(searchParams?: { from?: string; to?: string }): Promise<DashboardSummary> {
-    const params = new URLSearchParams()
-    if (searchParams?.from) params.set('from', searchParams.from)
-    if (searchParams?.to) params.set('to', searchParams.to)
+import { getDashboardData } from '@/lib/data/dashboard'
 
-    const res = await fetch(`http://localhost:3000/api/dashboard?${params.toString()}`, {
-        cache: 'no-store',
-    })
-
-    if (!res.ok) {
-        throw new Error('Failed to fetch dashboard data')
-    }
-
-    return res.json()
-}
 
 export default async function DashboardPage({
     searchParams,
@@ -32,7 +19,7 @@ export default async function DashboardPage({
     // Based on user environment, it seems to be Next 15 (package.json: "next": "^15").
     // So we must await it.
     const resolvedParams = await searchParams
-    const data = await getDashboardData(resolvedParams)
+    const data = await getDashboardData(resolvedParams?.from, resolvedParams?.to)
 
     return (
         <div className="p-8 space-y-6">

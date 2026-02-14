@@ -1,4 +1,4 @@
-import { ClientInput } from '@/lib/types'
+import { SupplierInput } from '@/lib/types'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
@@ -10,10 +10,10 @@ export async function PUT(
     try {
         const supabase = await createClient()
         const { id } = await params
-        const body: ClientInput = await request.json()
+        const body: SupplierInput = await request.json()
 
         const { data, error } = await supabase
-            .from('clients')
+            .from('suppliers')
             .update(body)
             .eq('id', id)
             .select('*')
@@ -23,8 +23,8 @@ export async function PUT(
 
         return NextResponse.json(data)
     } catch (error) {
-        console.error('Client PUT error:', error)
-        return NextResponse.json({ error: 'Failed to update client' }, { status: 500 })
+        console.error('Supplier PUT error:', error)
+        return NextResponse.json({ error: 'Failed to update supplier' }, { status: 500 })
     }
 }
 
@@ -37,7 +37,7 @@ export async function DELETE(
         const { id } = await params
 
         const { error } = await supabase
-            .from('clients')
+            .from('suppliers')
             .delete()
             .eq('id', id)
 
@@ -45,7 +45,7 @@ export async function DELETE(
 
         return NextResponse.json({ success: true })
     } catch (error) {
-        console.error('Client DELETE error:', error)
-        return NextResponse.json({ error: 'Failed to delete client' }, { status: 500 })
+        console.error('Supplier DELETE error:', error)
+        return NextResponse.json({ error: 'Failed to delete supplier' }, { status: 500 })
     }
 }

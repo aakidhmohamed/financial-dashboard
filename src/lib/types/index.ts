@@ -48,3 +48,17 @@ export type ClientInput = Database['public']['Tables']['clients']['Insert']
 export type SupplierInput = Database['public']['Tables']['suppliers']['Insert']
 export type InvoiceInput = Database['public']['Tables']['invoices']['Insert']
 export type InvoiceItemInput = Database['public']['Tables']['invoice_items']['Insert']
+
+export interface InvoiceListItem {
+    id: string
+    document_type: 'quotation' | 'invoice'
+    document_number: string
+    date: string
+    subtotal: number
+    discount: number
+    tax_rate: number
+    shipping: number
+    advance_paid: number
+    status: string
+    client: { id: string; name: string } | null
+}

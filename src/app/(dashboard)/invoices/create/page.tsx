@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Plus, Trash2, ArrowLeft, Lock } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
@@ -26,7 +26,7 @@ interface Account {
     balance: number
 }
 
-export default function CreateInvoicePage() {
+function CreateInvoiceContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const docType = (searchParams.get('type') as 'quotation' | 'invoice') || 'invoice'
@@ -432,3 +432,13 @@ export default function CreateInvoicePage() {
         </div>
     )
 }
+
+export default function CreateInvoicePage() {
+    return (
+        <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading...</div>}>
+            <CreateInvoiceContent />
+        </Suspense>
+    )
+}
+
+

@@ -1,0 +1,29 @@
+src/app/api/clients/[id]/route.ts(15,21): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(38,26): error TS2339: Property 'document_number' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(39,39): error TS2339: Property 'document_number' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(47,14): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(values: never, options?: { count?: "exact" | "planned" | "estimated" | undefined; } | undefined): PostgrestFilterBuilder<{ PostgrestVersion: "12"; }, never, never, null, "invoices", never, "POST">', gave the following error.
+    Argument of type '{ document_type: "invoice"; document_number: string; date: string; client_id: any; subtotal: any; discount: any; tax_rate: any; shipping: any; advance_paid: any; remarks: any; status: "draft"; quotation_id: any; }' is not assignable to parameter of type 'never'.
+  Overload 2 of 2, '(values: never[], options?: { count?: "exact" | "planned" | "estimated" | undefined; defaultToNull?: boolean | undefined; } | undefined): PostgrestFilterBuilder<{ PostgrestVersion: "12"; }, never, never, null, "invoices", never, "POST">', gave the following error.
+    Object literal may only specify known properties, and 'document_type' does not exist in type 'never[]'.
+src/app/api/invoices/[id]/convert/route.ts(51,38): error TS2339: Property 'client_id' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(52,37): error TS2339: Property 'subtotal' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(53,37): error TS2339: Property 'discount' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(54,37): error TS2339: Property 'tax_rate' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(55,37): error TS2339: Property 'shipping' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(56,41): error TS2339: Property 'advance_paid' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(57,36): error TS2339: Property 'remarks' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(59,41): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(67,23): error TS2339: Property 'items' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(67,42): error TS2339: Property 'items' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(68,40): error TS2339: Property 'items' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(70,41): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(89,21): error TS2345: Argument of type '{ status: string; }' is not assignable to parameter of type 'never'.
+src/app/api/invoices/[id]/convert/route.ts(96,31): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/api/invoices/[id]/route.ts(24,18): error TS2339: Property 'items' does not exist on type 'never'.
+src/app/api/invoices/[id]/route.ts(25,18): error TS2339: Property 'items' does not exist on type 'never'.
+src/app/api/invoices/[id]/route.ts(71,21): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
+src/app/api/invoices/next-number/route.ts(22,19): error TS2339: Property 'document_number' does not exist on type 'never'.
+src/app/api/invoices/next-number/route.ts(23,32): error TS2339: Property 'document_number' does not exist on type 'never'.
+src/app/api/invoices/route.ts(76,41): error TS2339: Property 'id' does not exist on type 'never'.
+src/app/api/suppliers/[id]/route.ts(15,21): error TS2345: Argument of type 'any' is not assignable to parameter of type 'never'.
