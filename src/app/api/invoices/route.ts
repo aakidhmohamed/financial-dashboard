@@ -1,16 +1,17 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { InvoiceInput, InvoiceItemInput } from '@/lib/types'
+import { invoiceSchema } from '@/lib/validations'
+import { calcSubtotal, calcInvoiceTotal } from '@/lib/invoice-utils'
 
 export async function GET(request: Request) {
     try {
         const supabase = await createClient()
         const { searchParams } = new URL(request.url)
 
-        const type = searchParams.get('type') // 'quotation' | 'invoice'
+        const type = searchParams.get('type')
         const status = searchParams.get('status')
         const page = parseInt(searchParams.get('page') || '1')
-        const limit = parseInt(searchParams.get('limit') || '50')
+        const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100)
         const offset = (page - 1) * limit
 
         let query = supabase
@@ -51,34 +52,53 @@ export async function POST(request: Request) {
         const supabase = await createClient()
         const body = await request.json()
 
-        const { items, ...invoiceData } = body
+        // Server-side validation
+        const parsed = invoiceSchema.safeParse(body)
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
+                { status: 400 }
+            )
+        }
 
-        // Calculate subtotal from items
-        const subtotal = items.reduce(
-            (sum: number, item: { quantity: number; unit_price: number }) =>
-                sum + item.quantity * item.unit_price,
-            0
-        )
-        invoiceData.subtotal = subtotal
+        const { items, ...rest } = parsed.data
+
+        // Calculate subtotal from validated items using shared utility
+        const subtotal = calcSubtotal(items)
+
+        const invoiceData = {
+            document_type: rest.document_type,
+            document_number: rest.document_number,
+            date: rest.date,
+            client_id: rest.client_id || null,
+            subtotal,
+            discount: rest.discount,
+            tax_rate: rest.tax_rate,
+            shipping: rest.shipping,
+            advance_paid: rest.advance_paid,
+            remarks: rest.remarks || null,
+            status: rest.status,
+            quotation_id: rest.quotation_id || null,
+        }
 
         // Insert invoice
         const { data: invoice, error: invoiceError } = await supabase
             .from('invoices')
-            .insert(invoiceData as InvoiceInput)
+            .insert(invoiceData)
             .select('*')
             .single()
 
         if (invoiceError) throw invoiceError
 
         // Insert items
-        if (items && items.length > 0) {
+        if (items.length > 0) {
             const itemsWithInvoiceId = items.map(
-                (item: { description: string; quantity: number; unit_price: number }, index: number) => ({
+                (item, index) => ({
                     invoice_id: invoice.id,
                     description: item.description,
                     quantity: item.quantity,
                     unit_price: item.unit_price,
-                    total: item.quantity * item.unit_price,
+                    total: Math.round(item.quantity * item.unit_price * 100) / 100,
                     sort_order: index,
                 })
             )
@@ -90,15 +110,14 @@ export async function POST(request: Request) {
             if (itemsError) throw itemsError
         }
 
-        // Create Accounts Receivable transactions when invoice is sent (not drafts/quotations)
-        const shouldCreateAR = (invoice as any).status === 'sent' && (invoice as any).document_type === 'invoice'
-
-        if (shouldCreateAR) {
-            // Calculate total invoice amount
-            const totalAmount = subtotal
-                - ((invoice as any).discount || 0)
-                + (subtotal - ((invoice as any).discount || 0)) * (((invoice as any).tax_rate || 0) / 100)
-                + ((invoice as any).shipping || 0)
+        // Create AR transaction if sent invoice (revenue recognition)
+        if (invoice.status === 'sent' && invoice.document_type === 'invoice') {
+            const totalAmount = calcInvoiceTotal(
+                subtotal,
+                invoice.discount,
+                invoice.tax_rate,
+                invoice.shipping
+            )
 
             // Find or create Accounts Receivable account
             let { data: arAccount } = await supabase
@@ -111,14 +130,9 @@ export async function POST(request: Request) {
             if (!arAccount) {
                 const { data: newAR, error: arError } = await supabase
                     .from('accounts')
-                    .insert({
-                        name: 'Accounts Receivable',
-                        type: 'asset',
-                        balance: 0,
-                    } as any)
+                    .insert({ name: 'Accounts Receivable', type: 'asset' as const, balance: 0 })
                     .select('id')
                     .single()
-
                 if (arError) throw arError
                 arAccount = newAR
             }
@@ -134,46 +148,43 @@ export async function POST(request: Request) {
             if (!salesCategory) {
                 const { data: newCategory, error: catError } = await supabase
                     .from('categories')
-                    .insert({
-                        name: 'Sales',
-                        type: 'revenue',
-                    } as any)
+                    .insert({ name: 'Sales', type: 'revenue' as const })
                     .select('id')
                     .single()
-
                 if (catError) throw catError
                 salesCategory = newCategory
             }
 
-            // Create AR transaction (Debit Accounts Receivable, Credit Revenue)
-            await supabase
-                .from('transactions')
-                .insert({
-                    type: 'revenue',
-                    category_id: (salesCategory as any).id,
-                    amount: totalAmount,
-                    account_id: (arAccount as any).id,
-                    client_id: (invoice as any).client_id,
-                    invoice_id: (invoice as any).id,
-                    date: (invoice as any).date,
-                    description: `Invoice ${(invoice as any).document_number} - Revenue recognition`,
-                } as any)
+            if (arAccount && salesCategory) {
+                await supabase
+                    .from('transactions')
+                    .insert({
+                        type: 'revenue' as const,
+                        category_id: salesCategory.id,
+                        amount: totalAmount,
+                        account_id: arAccount.id,
+                        client_id: invoice.client_id,
+                        invoice_id: invoice.id,
+                        date: invoice.date,
+                        description: `Invoice ${invoice.document_number} - Revenue recognition`,
+                    })
+            }
         }
 
         // Fetch the complete invoice with relations
         const { data: result, error: fetchError } = await supabase
             .from('invoices')
             .select(`*, client:clients(*), items:invoice_items(*)`)
-            .eq('id', (invoice as any).id)
+            .eq('id', invoice.id)
             .single()
 
         if (fetchError) throw fetchError
 
         return NextResponse.json(result, { status: 201 })
-    } catch (error: any) {
+    } catch (error) {
         console.error('Invoices POST error:', error)
         return NextResponse.json(
-            { error: `Failed to create invoice: ${error.message || JSON.stringify(error)}` },
+            { error: 'Failed to create invoice' },
             { status: 500 }
         )
     }

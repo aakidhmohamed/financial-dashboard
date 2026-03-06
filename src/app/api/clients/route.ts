@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { clientSchema } from '@/lib/validations'
 
 export async function GET() {
     try {
@@ -27,9 +28,26 @@ export async function POST(request: Request) {
         const supabase = await createClient()
         const body = await request.json()
 
+        // Server-side validation
+        const parsed = clientSchema.safeParse(body)
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
+                { status: 400 }
+            )
+        }
+
+        const validData = parsed.data
+
         const { data, error } = await supabase
             .from('clients')
-            .insert(body)
+            .insert({
+                name: validData.name,
+                email: validData.email || null,
+                phone: validData.phone || null,
+                address: validData.address || null,
+                notes: validData.notes || null,
+            })
             .select('*')
             .single()
 

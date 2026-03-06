@@ -1,9 +1,10 @@
-import { DateRangeFilter } from '@/components/dashboard/date-range-filter'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { MetricCard } from '@/components/ui/metric-card'
-import { formatCurrency, formatDate } from '@/lib/utils'
-import type { DashboardSummary } from '@/lib/types'
-import { AlertCircle, ArrowUpRight, Plus, Download, TrendingUp, TrendingDown, Landmark } from 'lucide-react'
+import { TransactionListItem } from '@/components/ui/transaction-list-item'
+import { RevenueChart } from '@/components/dashboard/revenue-chart'
+import { DateRangeFilter } from '@/components/dashboard/date-range-filter'
+import { formatCurrency } from '@/lib/utils'
+import { AlertCircle, ArrowUpRight, Plus, TrendingUp, TrendingDown } from 'lucide-react'
 import Link from 'next/link'
 
 import { getDashboardData } from '@/lib/data/dashboard'
@@ -14,35 +15,24 @@ export default async function DashboardPage({
 }: {
     searchParams: Promise<{ from?: string; to?: string }>
 }) {
-    // Await params in newer Next.js versions if needed, but for now treating as prop
-    // In Next.js 15+, searchParams is a Promise. Let's handle it safely.
-    // Based on user environment, it seems to be Next 15 (package.json: "next": "^15").
-    // So we must await it.
     const resolvedParams = await searchParams
     const data = await getDashboardData(resolvedParams?.from, resolvedParams?.to)
 
     return (
-        <div className="p-8 space-y-6">
+        <div className="p-4 md:p-8 space-y-6">
             {/* Page Header */}
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-extrabold text-foreground mb-1">Dashboard</h1>
+                    <h1 className="text-2xl md:text-3xl font-extrabold text-foreground mb-1">Dashboard</h1>
                     <p className="text-muted-foreground text-sm">
                         Real-time overview of your net worth and liquidity.
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <DateRangeFilter />
-
-                    <button className="inline-flex items-center gap-2 px-5 py-2.5 bg-card border border-border rounded-xl text-sm font-semibold hover:shadow-sm transition-all">
-                        Import Data
-                    </button>
-                </div>
+                <DateRangeFilter />
             </div>
 
-            {/* Key Metrics: first card highlighted */}
-            {/* Key Metrics: first card highlighted */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {/* Key Metrics */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
                 <MetricCard
                     title="Net Worth"
                     value={data.netWorth}
@@ -83,39 +73,14 @@ export default async function DashboardPage({
             </div>
 
             {/* Row 2: Charts / Analytics + Renewals + Quick Actions */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                {/* Weekly Revenue Chart Placeholder */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
+                {/* Revenue Chart — now uses REAL data */}
                 <Card>
                     <CardHeader>
                         <CardTitle>Revenue Analytics</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex items-end justify-between h-[180px] gap-3 pt-4">
-                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => {
-                                const heights = [40, 60, 74, 55, 70, 50, 35]
-                                return (
-                                    <div key={i} className="flex-1 flex flex-col items-center gap-2">
-                                        <div className="w-full relative flex-1 flex items-end">
-                                            <div
-                                                className="w-full rounded-xl transition-all"
-                                                style={{
-                                                    height: `${heights[i]}%`,
-                                                    backgroundColor: i === 2
-                                                        ? 'hsl(var(--primary))'
-                                                        : `hsl(var(--primary) / ${0.2 + (heights[i] / 100) * 0.5})`
-                                                }}
-                                            />
-                                            {i === 2 && (
-                                                <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-foreground text-card text-xs font-bold px-2 py-1 rounded-lg whitespace-nowrap">
-                                                    74%
-                                                </div>
-                                            )}
-                                        </div>
-                                        <span className="text-xs text-muted-foreground font-medium">{day}</span>
-                                    </div>
-                                )
-                            })}
-                        </div>
+                        <RevenueChart data={data.dailyRevenue} />
                     </CardContent>
                 </Card>
 
@@ -161,7 +126,6 @@ export default async function DashboardPage({
                 <Card>
                     <CardHeader>
                         <CardTitle>Accounts</CardTitle>
-                        <Link href="#" className="text-xs text-primary font-semibold hover:underline">View All</Link>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-3">
@@ -194,7 +158,7 @@ export default async function DashboardPage({
             </div>
 
             {/* Row 3: Balance Sheet + Recent Transactions */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
                 {/* Balance Sheet */}
                 <Card>
                     <CardHeader>
@@ -253,7 +217,7 @@ export default async function DashboardPage({
                     </CardContent>
                 </Card>
 
-                {/* Recent Transactions */}
+                {/* Recent Transactions — now uses shared component */}
                 <Card>
                     <CardHeader>
                         <CardTitle>Recent Transactions</CardTitle>
@@ -279,42 +243,9 @@ export default async function DashboardPage({
                             </div>
                         ) : (
                             <div className="space-y-2">
-                                {data.recentTransactions.map(transaction => {
-                                    const isRevenue = transaction.type === 'revenue'
-                                    const isCapital = transaction.type === 'capital'
-                                    const isTransfer = transaction.type === 'transfer'
-                                    const bgColor = isTransfer ? 'bg-purple-50' : isCapital ? 'bg-blue-50' : isRevenue ? 'bg-emerald-50' : 'bg-red-50'
-                                    const textColor = isTransfer ? 'text-purple-600' : isCapital ? 'text-blue-600' : isRevenue ? 'text-emerald-600' : 'text-red-500'
-                                    const prefix = transaction.type === 'expense' ? '-' : isTransfer ? '↔ ' : '+'
-                                    return (
-                                        <div
-                                            key={transaction.id}
-                                            className="flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 transition-colors"
-                                        >
-                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${bgColor}`}>
-                                                {isTransfer ? (
-                                                    <ArrowUpRight className={`w-4 h-4 ${textColor}`} />
-                                                ) : isCapital ? (
-                                                    <Landmark className={`w-4 h-4 ${textColor}`} />
-                                                ) : isRevenue ? (
-                                                    <TrendingUp className={`w-4 h-4 ${textColor}`} />
-                                                ) : (
-                                                    <TrendingDown className={`w-4 h-4 ${textColor}`} />
-                                                )}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate">{transaction.category?.name}</p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {formatDate(transaction.date)} • {transaction.description || 'No description'}
-                                                </p>
-                                            </div>
-                                            <span className={`text-sm font-bold ${textColor}`}>
-                                                {prefix}
-                                                {formatCurrency(Number(transaction.amount))}
-                                            </span>
-                                        </div>
-                                    )
-                                })}
+                                {data.recentTransactions.map(transaction => (
+                                    <TransactionListItem key={transaction.id} transaction={transaction} />
+                                ))}
                             </div>
                         )}
                     </CardContent>

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { invoiceUpdateSchema } from '@/lib/validations'
+import { calcSubtotal, calcInvoiceTotal } from '@/lib/invoice-utils'
 
 export async function GET(
     _request: Request,
@@ -44,6 +46,17 @@ export async function PUT(
         const { id } = await params
         const body = await request.json()
 
+        // Server-side validation
+        const parsed = invoiceUpdateSchema.safeParse(body)
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
+                { status: 400 }
+            )
+        }
+
+        const validData = parsed.data
+
         // Fetch current invoice data to detect changes
         const { data: oldInvoice, error: fetchError } = await supabase
             .from('invoices')
@@ -52,43 +65,51 @@ export async function PUT(
             .single()
 
         if (fetchError) throw fetchError
+        if (!oldInvoice) {
+            return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
+        }
 
-        const { items, payment_account_id, ...invoiceData } = body
+        const { items, payment_account_id, ...invoiceFields } = validData
+
+        // Build update payload with explicit field whitelisting
+        const updatePayload: Record<string, unknown> = {}
+        if (invoiceFields.document_type !== undefined) updatePayload.document_type = invoiceFields.document_type
+        if (invoiceFields.document_number !== undefined) updatePayload.document_number = invoiceFields.document_number
+        if (invoiceFields.date !== undefined) updatePayload.date = invoiceFields.date
+        if (invoiceFields.client_id !== undefined) updatePayload.client_id = invoiceFields.client_id || null
+        if (invoiceFields.discount !== undefined) updatePayload.discount = invoiceFields.discount
+        if (invoiceFields.tax_rate !== undefined) updatePayload.tax_rate = invoiceFields.tax_rate
+        if (invoiceFields.shipping !== undefined) updatePayload.shipping = invoiceFields.shipping
+        if (invoiceFields.advance_paid !== undefined) updatePayload.advance_paid = invoiceFields.advance_paid
+        if (invoiceFields.remarks !== undefined) updatePayload.remarks = invoiceFields.remarks || null
+        if (invoiceFields.status !== undefined) updatePayload.status = invoiceFields.status
 
         // Recalculate subtotal if items provided
         if (items) {
-            invoiceData.subtotal = items.reduce(
-                (sum: number, item: { quantity: number; unit_price: number }) =>
-                    sum + item.quantity * item.unit_price,
-                0
-            )
+            updatePayload.subtotal = calcSubtotal(items)
         }
 
-        invoiceData.updated_at = new Date().toISOString()
+        updatePayload.updated_at = new Date().toISOString()
 
         const { error: updateError } = await supabase
             .from('invoices')
-            .update(invoiceData)
+            .update(updatePayload)
             .eq('id', id)
 
         if (updateError) throw updateError
 
         // Replace items if provided
         if (items) {
-            // Delete old items
             await supabase.from('invoice_items').delete().eq('invoice_id', id)
 
-            // Insert new items
-            const itemsWithInvoiceId = items.map(
-                (item: { description: string; quantity: number; unit_price: number }, index: number) => ({
-                    invoice_id: id,
-                    description: item.description,
-                    quantity: item.quantity,
-                    unit_price: item.unit_price,
-                    total: item.quantity * item.unit_price,
-                    sort_order: index,
-                })
-            )
+            const itemsWithInvoiceId = items.map((item, index) => ({
+                invoice_id: id,
+                description: item.description,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                total: Math.round(item.quantity * item.unit_price * 100) / 100,
+                sort_order: index,
+            }))
 
             const { error: itemsError } = await supabase
                 .from('invoice_items')
@@ -97,49 +118,58 @@ export async function PUT(
             if (itemsError) throw itemsError
         }
 
-        // Calculate old and new total amounts (needed for AR logic)
-        const oldSubtotal = (oldInvoice as any).subtotal || 0
-        const oldDiscount = (oldInvoice as any).discount || 0
-        const oldTaxRate = (oldInvoice as any).tax_rate || 0
-        const oldShipping = (oldInvoice as any).shipping || 0
-        const oldTotalAmount = (oldSubtotal - oldDiscount) * (1 + oldTaxRate / 100) + oldShipping
+        // Calculate old and new totals using shared utility
+        const oldTotalAmount = calcInvoiceTotal(
+            oldInvoice.subtotal || 0,
+            oldInvoice.discount || 0,
+            oldInvoice.tax_rate || 0,
+            oldInvoice.shipping || 0
+        )
 
-        const newSubtotal = invoiceData.subtotal !== undefined ? invoiceData.subtotal : oldSubtotal
-        const newDiscount = invoiceData.discount !== undefined ? invoiceData.discount : oldDiscount
-        const newTaxRate = invoiceData.tax_rate !== undefined ? invoiceData.tax_rate : oldTaxRate
-        const newShipping = invoiceData.shipping !== undefined ? invoiceData.shipping : oldShipping
-        const newTotalAmount = (newSubtotal - newDiscount) * (1 + newTaxRate / 100) + newShipping
+        const newSubtotal = updatePayload.subtotal !== undefined
+            ? updatePayload.subtotal as number
+            : oldInvoice.subtotal || 0
+        const newDiscount = updatePayload.discount !== undefined
+            ? updatePayload.discount as number
+            : oldInvoice.discount || 0
+        const newTaxRate = updatePayload.tax_rate !== undefined
+            ? updatePayload.tax_rate as number
+            : oldInvoice.tax_rate || 0
+        const newShipping = updatePayload.shipping !== undefined
+            ? updatePayload.shipping as number
+            : oldInvoice.shipping || 0
+        const newTotalAmount = calcInvoiceTotal(newSubtotal, newDiscount, newTaxRate, newShipping)
 
-        // Only process AR logic if invoice is sent (or becoming sent) OR paid
-        const oldIsSent = ((oldInvoice as any).status === 'sent' || (oldInvoice as any).status === 'paid') && (oldInvoice as any).document_type === 'invoice'
-        const newIsSent = (invoiceData.status === 'sent' || invoiceData.status === 'paid') && (oldInvoice as any).document_type === 'invoice'
+        // AR logic — determine invoice status transitions
+        const oldIsSent = (oldInvoice.status === 'sent' || oldInvoice.status === 'paid') && oldInvoice.document_type === 'invoice'
+        const newStatus = invoiceFields.status || oldInvoice.status
+        const newIsSent = (newStatus === 'sent' || newStatus === 'paid') && oldInvoice.document_type === 'invoice'
 
-        // Prepare Common Accounts (AR, Sales)
-        // We fetch/create them if needed, because payment logic needs AR account even for Drafts
-        let { data: arAccount } = await supabase
-            .from('accounts')
-            .select('id')
-            .eq('name', 'Accounts Receivable')
-            .eq('type', 'asset')
-            .single()
-
-        if (!arAccount) {
-            const { data: newAR, error: arError } = await supabase
+        // Find or create AR account (needed for AR logic)
+        let arAccount: { id: string } | null = null
+        if (oldIsSent || newIsSent) {
+            const { data: existingAR } = await supabase
                 .from('accounts')
-                .insert({
-                    name: 'Accounts Receivable',
-                    type: 'asset',
-                    balance: 0,
-                } as any)
                 .select('id')
+                .eq('name', 'Accounts Receivable')
+                .eq('type', 'asset')
                 .single()
-            if (arError) throw arError
-            arAccount = newAR
+
+            if (existingAR) {
+                arAccount = existingAR
+            } else {
+                const { data: newAR, error: arError } = await supabase
+                    .from('accounts')
+                    .insert({ name: 'Accounts Receivable', type: 'asset' as const, balance: 0 })
+                    .select('id')
+                    .single()
+                if (arError) throw arError
+                arAccount = newAR
+            }
         }
 
         // Handle Status Change: Draft -> Sent/Paid (Revenue Recognition)
-        if (!oldIsSent && newIsSent) {
-            // Find or create Sales Revenue category
+        if (!oldIsSent && newIsSent && arAccount) {
             let { data: salesCategory } = await supabase
                 .from('categories')
                 .select('id')
@@ -150,95 +180,82 @@ export async function PUT(
             if (!salesCategory) {
                 const { data: newCategory, error: catError } = await supabase
                     .from('categories')
-                    .insert({
-                        name: 'Sales',
-                        type: 'revenue',
-                    } as any)
+                    .insert({ name: 'Sales', type: 'revenue' as const })
                     .select('id')
                     .single()
                 if (catError) throw catError
                 salesCategory = newCategory
             }
 
-            // Create AR transaction (Debit Accounts Receivable, Credit Revenue)
-            // Use newTotalAmount calculated above
-            await supabase
-                .from('transactions')
-                .insert({
-                    type: 'revenue',
-                    category_id: (salesCategory as any).id,
-                    amount: newTotalAmount,
-                    account_id: (arAccount as any).id,
-                    client_id: body.client_id || (oldInvoice as any).client_id,
-                    invoice_id: id,
-                    date: body.date || (oldInvoice as any).date,
-                    description: `Invoice ${(oldInvoice as any).document_number} - Revenue recognition`,
-                } as any)
+            if (salesCategory) {
+                await supabase
+                    .from('transactions')
+                    .insert({
+                        type: 'revenue' as const,
+                        category_id: salesCategory.id,
+                        amount: newTotalAmount,
+                        account_id: arAccount.id,
+                        client_id: validData.client_id || oldInvoice.client_id || null,
+                        invoice_id: id,
+                        date: validData.date || oldInvoice.date,
+                        description: `Invoice ${oldInvoice.document_number} - Revenue recognition`,
+                    })
+            }
         }
 
-        if (oldIsSent) { // Logic for existing sent invoices (adjustments)
-            if (arAccount) {
-                // Handle invoice amount changes (AR adjustments)
-                const amountChange = newTotalAmount - oldTotalAmount
+        // Handle amount adjustments on already-sent invoices
+        if (oldIsSent && arAccount) {
+            const amountChange = newTotalAmount - oldTotalAmount
 
-                if (amountChange !== 0) {
-                    // Find Sales category
-                    const { data: salesCategory } = await supabase
-                        .from('categories')
-                        .select('id')
-                        .eq('name', 'Sales')
-                        .eq('type', 'revenue')
-                        .single()
+            if (Math.abs(amountChange) > 0.005) { // Avoid floating point noise
+                const { data: salesCategory } = await supabase
+                    .from('categories')
+                    .select('id')
+                    .eq('name', 'Sales')
+                    .eq('type', 'revenue')
+                    .single()
 
-                    if (salesCategory) {
-                        // Create AR adjustment transaction
-                        await supabase
-                            .from('transactions')
-                            .insert({
-                                type: 'revenue',
-                                category_id: (salesCategory as any).id,
-                                amount: Math.abs(amountChange),
-                                account_id: (arAccount as any).id,
-                                client_id: body.client_id || (oldInvoice as any).client_id,
-                                invoice_id: id,
-                                date: body.date || (oldInvoice as any).date,
-                                description: amountChange > 0
-                                    ? `Invoice ${(oldInvoice as any).document_number} - AR adjustment (increase)`
-                                    : `Invoice ${(oldInvoice as any).document_number} - AR adjustment (decrease)`,
-                                ...(amountChange < 0 && { amount: -Math.abs(amountChange) })
-                            } as any)
-                    }
+                if (salesCategory) {
+                    // FIX: Always use positive amounts. Use 'revenue' for increases, 'expense' for decreases.
+                    // This maintains the "amounts are always positive" invariant.
+                    await supabase
+                        .from('transactions')
+                        .insert({
+                            type: amountChange > 0 ? 'revenue' as const : 'expense' as const,
+                            category_id: salesCategory.id,
+                            amount: Math.abs(amountChange),
+                            account_id: arAccount.id,
+                            client_id: validData.client_id || oldInvoice.client_id || null,
+                            invoice_id: id,
+                            date: validData.date || oldInvoice.date,
+                            description: amountChange > 0
+                                ? `Invoice ${oldInvoice.document_number} - AR adjustment (increase)`
+                                : `Invoice ${oldInvoice.document_number} - AR adjustment (decrease)`,
+                        })
                 }
             }
         }
 
-        // Handle advance payment changes (AR → Cash transfers)
-        // STRICT ACCRUAL: Payments only recorded if invoice is Sent (or becoming Sent)
-        const advanceChange = (body.advance_paid || 0) - ((oldInvoice as any)?.advance_paid || 0)
-
-        // Check if invoice will be in 'sent' state after this update
+        // Handle advance payment changes
+        const advanceChange = (validData.advance_paid || 0) - (oldInvoice.advance_paid || 0)
         const isSent = newIsSent || oldIsSent
 
-        if (isSent && advanceChange !== 0 && payment_account_id && arAccount) {
-            // Create transfer transaction: AR → Cash
-            // If AR balance becomes negative (because invoice is draft/unpaid), it represents Customer Deposit (Liability)
-            const transactionDescription = advanceChange > 0
-                ? `Payment received for ${(oldInvoice as any).document_number}`
-                : `Payment reversal for ${(oldInvoice as any).document_number}`
-
+        if (isSent && Math.abs(advanceChange) > 0.005 && payment_account_id && arAccount) {
+            // FIX: Always use positive amounts for transfers. Direction is determined by account_id/to_account_id.
             const { error: payError } = await supabase
                 .from('transactions')
                 .insert({
-                    type: 'transfer',
+                    type: 'transfer' as const,
                     amount: Math.abs(advanceChange),
-                    account_id: (arAccount as any).id, // Source (AR) - Decreases
-                    to_account_id: payment_account_id, // Destination (Cash/Bank) - Increases
-                    client_id: body.client_id || (oldInvoice as any).client_id,
+                    account_id: advanceChange > 0 ? arAccount.id : payment_account_id,
+                    to_account_id: advanceChange > 0 ? payment_account_id : arAccount.id,
+                    client_id: validData.client_id || oldInvoice.client_id || null,
                     invoice_id: id,
-                    date: body.date || (oldInvoice as any).date,
-                    description: transactionDescription,
-                    ...(advanceChange < 0 && { amount: -Math.abs(advanceChange) })
-                } as any)
+                    date: validData.date || oldInvoice.date,
+                    description: advanceChange > 0
+                        ? `Payment received for ${oldInvoice.document_number}`
+                        : `Payment reversal for ${oldInvoice.document_number}`,
+                })
 
             if (payError) throw payError
         }
@@ -256,7 +273,7 @@ export async function PUT(
     } catch (error) {
         console.error('Invoice PUT error:', error)
         return NextResponse.json(
-            { error: `Failed to update invoice: ${(error as any).message || error}` },
+            { error: 'Failed to update invoice' },
             { status: 500 }
         )
     }
@@ -270,8 +287,7 @@ export async function DELETE(
         const supabase = await createClient()
         const { id } = await params
 
-        // First delete associated transactions to ensure account balances are updated
-        // This triggers the database to reverse the balance changes
+        // Delete associated transactions first
         const { error: txError } = await supabase
             .from('transactions')
             .delete()
@@ -279,7 +295,7 @@ export async function DELETE(
 
         if (txError) throw txError
 
-        // Delete invoice items (redundant if cascade exists, but safe)
+        // Delete invoice items
         const { error: itemsError } = await supabase
             .from('invoice_items')
             .delete()
@@ -287,7 +303,7 @@ export async function DELETE(
 
         if (itemsError) throw itemsError
 
-        // Finally delete the invoice
+        // Delete the invoice
         const { error } = await supabase
             .from('invoices')
             .delete()

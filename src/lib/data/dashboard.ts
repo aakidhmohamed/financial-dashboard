@@ -1,8 +1,19 @@
 import { createClient } from '@/lib/supabase/server'
 import { cache } from 'react'
 import type { Account, DashboardSummary, TransactionWithRelations } from '@/lib/types'
+import { format, subDays } from 'date-fns'
 
-export const getDashboardData = cache(async (from?: string, to?: string): Promise<DashboardSummary> => {
+export interface DailyRevenue {
+    day: string
+    label: string
+    revenue: number
+}
+
+export interface DashboardDataExtended extends DashboardSummary {
+    dailyRevenue: DailyRevenue[]
+}
+
+export const getDashboardData = cache(async (from?: string, to?: string): Promise<DashboardDataExtended> => {
     const supabase = await createClient()
 
     // Date range calculation
@@ -18,7 +29,8 @@ export const getDashboardData = cache(async (from?: string, to?: string): Promis
         { data: accounts },
         { data: periodTransactions },
         { data: recentTransactions },
-        { count: upcomingRenewals }
+        { count: upcomingRenewals },
+        { data: revenueTransactions }
     ] = await Promise.all([
         // 1. All Accounts (for Net Worth, Asset/Liability totals, Cash Balance)
         supabase
@@ -50,14 +62,24 @@ export const getDashboardData = cache(async (from?: string, to?: string): Promis
         // 4. Upcoming Renewals (Count only)
         supabase
             .from('renewals')
-            .select('*', { count: 'exact', head: true }) // head: true means usually count only, but check supabase js
+            .select('*', { count: 'exact', head: true })
             .eq('status', 'pending')
-            .lte('renewal_date', new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+            .lte('renewal_date', new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]),
+
+        // 5. Revenue transactions within the date range (for the chart)
+        supabase
+            .from('transactions')
+            .select('date, amount')
+            .eq('type', 'revenue')
+            .gte('date', startDate)
+            .lte('date', endDate)
+            .order('date', { ascending: true }),
     ])
 
     const safeAccounts = (accounts as Account[]) || []
     const safePeriodTx = (periodTransactions as unknown as Pick<TransactionWithRelations, 'amount' | 'type'>[]) || []
     const safeRecentTx = (recentTransactions as TransactionWithRelations[]) || []
+    const safeRevenueTx = (revenueTransactions as Array<{ date: string; amount: number }>) || []
 
     // Calculations
     const totalAssets = safeAccounts
@@ -68,9 +90,9 @@ export const getDashboardData = cache(async (from?: string, to?: string): Promis
         .filter(a => a.type === 'liability')
         .reduce((sum, a) => sum + Number(a.balance), 0)
 
-    const netWorth = totalAssets - totalLiabilities
+    const netWorth = Math.round((totalAssets - totalLiabilities) * 100) / 100
 
-    const cashAccount = safeAccounts.find(a => a.name === 'Cash' || a.name === 'Bank') // Adjusted logic slightly to be safe
+    const cashAccount = safeAccounts.find(a => a.name === 'Cash' || a.name === 'Bank')
     const cashBalance = cashAccount ? Number(cashAccount.balance) : 0
 
     // Period Totals
@@ -86,7 +108,27 @@ export const getDashboardData = cache(async (from?: string, to?: string): Promis
         .filter(t => t.type === 'capital')
         .reduce((sum, t) => sum + Number(t.amount), 0)
 
-    const netProfitThisMonth = revenueThisMonth - expensesThisMonth
+    const netProfitThisMonth = Math.round((revenueThisMonth - expensesThisMonth) * 100) / 100
+
+    // Build daily revenue aggregation for chart
+    const revenueByDay: Record<string, number> = {}
+    for (const tx of safeRevenueTx) {
+        const day = tx.date
+        revenueByDay[day] = (revenueByDay[day] || 0) + Number(tx.amount)
+    }
+
+    // Generate labels for chart — show up to last 7 days with data, or generate from date range
+    const dailyRevenue: DailyRevenue[] = Object.entries(revenueByDay)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(-14) // last 14 days max
+        .map(([day, revenue]) => {
+            const d = new Date(day)
+            return {
+                day,
+                label: format(d, 'MMM d'),
+                revenue: Math.round(revenue * 100) / 100,
+            }
+        })
 
     return {
         netWorth,
@@ -100,5 +142,6 @@ export const getDashboardData = cache(async (from?: string, to?: string): Promis
         upcomingRenewals: upcomingRenewals || 0,
         accountBalances: safeAccounts,
         recentTransactions: safeRecentTx,
+        dailyRevenue,
     }
 })

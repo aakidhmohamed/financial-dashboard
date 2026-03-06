@@ -1,7 +1,6 @@
-import { SupplierInput } from '@/lib/types'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-
+import { supplierSchema } from '@/lib/validations'
 
 export async function PUT(
     request: Request,
@@ -10,11 +9,27 @@ export async function PUT(
     try {
         const supabase = await createClient()
         const { id } = await params
-        const body: SupplierInput = await request.json()
+        const body = await request.json()
+
+        // Server-side validation
+        const parsed = supplierSchema.safeParse(body)
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
+                { status: 400 }
+            )
+        }
+
+        const validData = parsed.data
 
         const { data, error } = await supabase
             .from('suppliers')
-            .update(body)
+            .update({
+                name: validData.name,
+                email: validData.email || null,
+                phone: validData.phone || null,
+                notes: validData.notes || null,
+            })
             .eq('id', id)
             .select('*')
             .single()
