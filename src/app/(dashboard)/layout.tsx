@@ -9,6 +9,7 @@ import {
     FileText,
     Users,
     Building2,
+    Landmark,
     Calendar,
     Settings,
     HelpCircle,
@@ -26,6 +27,7 @@ const navLinks = [
     { href: '/invoices', icon: FileText, label: 'Invoices', prefix: true },
     { href: '/clients', icon: Users, label: 'Clients' },
     { href: '/suppliers', icon: Building2, label: 'Suppliers' },
+    { href: '/loans', icon: Landmark, label: 'Loans' },
     { href: '/renewals', icon: Calendar, label: 'Renewals' },
 ]
 

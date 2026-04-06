@@ -131,6 +131,7 @@ export interface Database {
                     supplier_id: string | null
                     account_id: string
                     to_account_id: string | null
+                    skip_balance_update: boolean
                     created_at: string
                     updated_at: string
                 }
@@ -145,6 +146,7 @@ export interface Database {
                     supplier_id?: string | null
                     account_id: string
                     to_account_id?: string | null
+                    skip_balance_update?: boolean
                     created_at?: string
                     updated_at?: string
                 }
@@ -159,6 +161,7 @@ export interface Database {
                     supplier_id?: string | null
                     account_id?: string
                     to_account_id?: string | null
+                    skip_balance_update?: boolean
                     created_at?: string
                     updated_at?: string
                 }
@@ -277,6 +280,76 @@ export interface Database {
                     created_at?: string
                 }
             }
+            loans: {
+                Row: {
+                    id: string
+                    person_name: string
+                    direction: 'borrowed' | 'lent'
+                    amount: number
+                    start_date: string
+                    remaining_balance: number
+                    status: 'active' | 'paid' | 'defaulted'
+                    notes: string | null
+                    account_id: string
+                    liability_account_id: string
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
+                    id?: string
+                    person_name: string
+                    direction?: 'borrowed' | 'lent'
+                    amount: number
+                    start_date?: string
+                    remaining_balance: number
+                    status?: 'active' | 'paid' | 'defaulted'
+                    notes?: string | null
+                    account_id: string
+                    liability_account_id: string
+                    created_at?: string
+                    updated_at?: string
+                }
+                Update: {
+                    id?: string
+                    person_name?: string
+                    direction?: 'borrowed' | 'lent'
+                    amount?: number
+                    start_date?: string
+                    remaining_balance?: number
+                    status?: 'active' | 'paid' | 'defaulted'
+                    notes?: string | null
+                    account_id?: string
+                    liability_account_id?: string
+                    created_at?: string
+                    updated_at?: string
+                }
+            }
+            loan_payments: {
+                Row: {
+                    id: string
+                    loan_id: string
+                    amount: number
+                    date: string
+                    notes: string | null
+                    created_at: string
+                }
+                Insert: {
+                    id?: string
+                    loan_id: string
+                    amount: number
+                    date?: string
+                    notes?: string | null
+                    created_at?: string
+                }
+                Update: {
+                    id?: string
+                    loan_id?: string
+                    amount?: number
+                    date?: string
+                    notes?: string | null
+                    created_at?: string
+                }
+            }
         }
         Views: {}
         Functions: {}
@@ -287,6 +360,7 @@ export interface Database {
             renewal_status: 'pending' | 'renewed' | 'expired'
             document_type: 'quotation' | 'invoice'
             invoice_status: 'draft' | 'sent' | 'accepted' | 'expired' | 'paid'
+            loan_status: 'active' | 'paid' | 'defaulted'
         }
     }
 }

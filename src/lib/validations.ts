@@ -94,3 +94,28 @@ export const invoiceUpdateSchema = z.object({
 })
 
 export type InvoiceUpdatePayload = z.infer<typeof invoiceUpdateSchema>
+
+// ─── Loan Validation ───────────────────────────────────────────────
+export const loanSchema = z.object({
+    person_name: z.string().min(1, 'Name is required').max(255),
+    direction: z.enum(['borrowed', 'lent']).default('borrowed'),
+    amount: z.number().positive('Amount must be greater than 0'),
+    start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)'),
+    notes: z.string().nullish(),
+    account_id: z.string().uuid('Invalid account ID'),
+    liability_account_id: z.string().uuid('Invalid liability account ID'),
+}).refine(data => data.account_id !== data.liability_account_id, {
+    message: 'The two accounts must be different',
+    path: ['liability_account_id'],
+})
+
+export type LoanPayload = z.infer<typeof loanSchema>
+
+// ─── Loan Payment Validation ───────────────────────────────────────
+export const loanPaymentSchema = z.object({
+    amount: z.number().positive('Amount must be greater than 0'),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)'),
+    notes: z.string().nullish(),
+})
+
+export type LoanPaymentPayload = z.infer<typeof loanPaymentSchema>
