@@ -11,7 +11,7 @@ import type { Account } from '@/lib/types'
 
 const transactionSchema = z.object({
     date: z.string(),
-    type: z.enum(['revenue', 'expense', 'capital', 'transfer', 'loan']),
+    type: z.enum(['revenue', 'expense', 'capital', 'transfer']),
     category_id: z.string().uuid('Please select a category'),
     amount: z.number().positive('Amount must be greater than 0'),
     description: z.string().optional(),
@@ -20,7 +20,7 @@ const transactionSchema = z.object({
     account_id: z.string().uuid('Please select an account'),
     to_account_id: z.string().uuid().optional().or(z.literal('')),
 }).refine(data => {
-    if ((data.type === 'transfer' || data.type === 'loan') && !data.to_account_id) {
+    if (data.type === 'transfer' && !data.to_account_id) {
         return false
     }
     return true
@@ -28,7 +28,7 @@ const transactionSchema = z.object({
     message: 'Please select the second account',
     path: ['to_account_id'],
 }).refine(data => {
-    if ((data.type === 'transfer' || data.type === 'loan') && data.account_id === data.to_account_id) {
+    if (data.type === 'transfer' && data.account_id === data.to_account_id) {
         return false
     }
     return true
@@ -76,7 +76,8 @@ export function TransactionForm({
 
     const transactionType = watch('type')
     const selectedAccountId = watch('account_id')
-    const filteredCategories = categories.filter(c => c.type === transactionType)
+    const HIDDEN_CATEGORIES = ['Loan Principal', 'Loan Given', 'Loan Repayment']
+    const filteredCategories = categories.filter(c => c.type === transactionType && !HIDDEN_CATEGORIES.includes(c.name))
 
     const onSubmit = async (data: TransactionFormData) => {
         setIsSubmitting(true)
@@ -89,8 +90,7 @@ export function TransactionForm({
                 supplier_id: data.supplier_id || null,
                 description: data.description || null,
                 // For Transfer: account_id = Source, to_account_id = Dest
-                // For Loan: account_id = Asset (Deposit To), to_account_id = Liability (Loan From)
-                to_account_id: (data.type === 'transfer' || data.type === 'loan') ? (data.to_account_id || null) : null,
+                to_account_id: data.type === 'transfer' ? (data.to_account_id || null) : null,
             }
 
             const res = await fetch('/api/transactions', {
@@ -121,11 +121,10 @@ export function TransactionForm({
         expense: { label: 'Expense', activeClass: 'border-red-500 bg-red-50 text-red-500', hoverClass: 'hover:border-red-300' },
         capital: { label: 'Capital', activeClass: 'border-blue-500 bg-blue-50 text-blue-600', hoverClass: 'hover:border-blue-300' },
         transfer: { label: 'Transfer', activeClass: 'border-purple-500 bg-purple-50 text-purple-600', hoverClass: 'hover:border-purple-300' },
-        loan: { label: 'Loan', activeClass: 'border-amber-500 bg-amber-50 text-amber-700', hoverClass: 'hover:border-amber-300' },
     }
 
     const isTransfer = transactionType === 'transfer'
-    const isLoan = transactionType === 'loan'
+    const isLoan = false
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/30 backdrop-blur-sm">
@@ -163,8 +162,8 @@ export function TransactionForm({
                     {/* Type - 5 options */}
                     <div>
                         <label className="block text-sm font-medium mb-1.5">Type</label>
-                        <div className="grid grid-cols-5 gap-2">
-                            {(['revenue', 'expense', 'capital', 'transfer', 'loan'] as const).map(type => (
+                        <div className="grid grid-cols-4 gap-2">
+                            {(['revenue', 'expense', 'capital', 'transfer'] as const).map(type => (
                                 <label
                                     key={type}
                                     className={cn(
